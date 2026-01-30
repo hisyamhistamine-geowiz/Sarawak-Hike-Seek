@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sarawak Hike & Seek</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600&family=Raleway:wght@400;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- ADVENTURE THEME CSS --- */
+        :root {
+            --forest-green: #1b4d3e;
+            --earth-brown: #5d4037;
+            --vibrant-orange: #ff6f00;
+            --light-bg: #f4f7f6;
+            --text-dark: #263238;
+            --white: #ffffff;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            background-color: var(--light-bg);
+            color: var(--text-dark);
+            font-family: 'Raleway', sans-serif;
+            line-height: 1.6;
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0 C 25 10 50 5 75 20 S 100 10 100 20 M0 30 C 20 40 50 20 80 40 S 100 30 100 40 M0 60 C 30 50 60 70 90 60 S 100 70 100 80' stroke='%235d4037' stroke-width='0.5' fill='none' opacity='0.1'/%3E%3C/svg%3E");
+            background-size: 200px 200px; 
+        }
+
+        h1, h2, h3 {
+            font-family: 'Oswald', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--forest-green);
+        }
+
+        /* --- NAVIGATION --- */
+        nav {
+            background-color: var(--forest-green);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo { color: var(--white); font-size: 1.8rem; font-family: 'Oswald', sans-serif; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .logo span { color: var(--vibrant-orange); }
+
+        .nav-links button {
+            background: none; border: none; color: rgba(255,255,255,0.8);
+            font-family: 'Oswald', sans-serif; font-size: 1.1rem; margin-left: 20px; cursor: pointer; transition: 0.3s;
+        }
+        .nav-links button:hover, .nav-links button.active { color: var(--vibrant-orange); transform: translateY(-2px); }
+
+        /* --- SECTIONS --- */
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; min-height: 85vh; }
+        .section { display: none; animation: fadeIn 0.6s ease; }
+        .section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* HERO */
+        .hero {
+            background: linear-gradient(rgba(27, 77, 62, 0.8), rgba(27, 77, 62, 0.6)), url('https://github.com/starchystone/Sarawak-Trek-and-Hike/blob/main/WebUI-Visuals/Banner.jpg?raw=true');
+            background-size: cover; background-position: center; color: white;
+            padding: 100px 20px; text-align: center; border-radius: 12px; margin-bottom: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .hero h1 { font-size: 3.5rem; margin-bottom: 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); color:white; }
+        .cta-btn {
+            background-color: var(--vibrant-orange); color: white; padding: 15px 40px;
+            font-size: 1.2rem; font-family: 'Oswald', sans-serif; text-transform: uppercase;
+            border: none; border-radius: 4px; cursor: pointer; transition: 0.3s;
+        }
+
+        /* --- MAP --- */
+        #map-container { height: 650px; width: 100%; border-radius: 12px; border: 4px solid var(--white); box-shadow: 0 8px 16px rgba(0,0,0,0.15); z-index: 1; }
+        .map-legend { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: bold; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+
+        /* --- POPUP STYLES (UPDATED FOR SCROLLING) --- */
+        .leaflet-popup-content-wrapper { border-radius: 0; padding: 0; overflow: hidden; }
+        
+        /* CRITICAL FIX: 
+           Use Flexbox to manage the popup layout so header stays fixed and body scrolls 
+        */
+        .leaflet-popup-content { 
+            margin: 0; 
+            width: 400px !important; 
+            max-height: 80vh !important; /* Cap height at 80% of screen height */
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .popup-header { 
+            background: var(--forest-green); color: white; padding: 15px; 
+            flex-shrink: 0; /* Header never shrinks */
+        }
+        .popup-header h3 { color: var(--vibrant-orange); font-size: 1.3rem; margin: 0; }
+        .popup-header div { font-size: 0.9rem; opacity: 0.9; margin-top: 5px; }
+        
+        .popup-body { 
+            padding: 15px; 
+            font-size: 0.95rem; 
+            overflow-y: auto; /* Scroll only this part */
+            flex-grow: 1;     /* Take up remaining space */
+        }
+        
+        .popup-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; background-color: #f0f4f3; padding: 10px; border-radius: 6px; margin-bottom: 15px; }
+        .popup-grid-item small { color: #666; font-size: 0.7rem; text-transform: uppercase; }
+        .popup-grid-item strong { display: block; color: var(--text-dark); font-size: 0.9rem; }
+
+        .info-label { color: var(--forest-green); font-weight: 700; font-family: 'Oswald', sans-serif; margin-bottom: 2px; display: block; margin-top: 15px; border-bottom: 1px solid #ddd; padding-bottom: 2px;}
+        
+        .details-txt-box {
+            background: #fffbe6; border-left: 3px solid var(--vibrant-orange);
+            padding: 10px; font-size: 0.9rem; white-space: pre-wrap; margin-bottom: 5px;
+            font-style: italic; color: #555;
+        }
+
+        /* --- CAROUSEL --- */
+        .carousel-container { position: relative; width: 100%; height: 200px; background: #222; border-radius: 4px; overflow: hidden; margin-top: 10px; display: flex; align-items: center; justify-content: center; }
+        .carousel-container img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; cursor: zoom-in; }
+        .carousel-btn {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: rgba(0,0,0,0.5); color: white; border: none; padding: 10px; cursor: pointer; font-size: 1.2rem; z-index: 10;
+        }
+        .prev-btn { left: 0; }
+        .next-btn { right: 0; }
+        .carousel-counter { position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.6); color: white; padding: 2px 6px; font-size: 0.7rem; border-radius: 3px; }
+
+        /* --- LIGHTBOX (FULL SCREEN) --- */
+        .lightbox {
+            display: none;
+            position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            align-items: center; justify-content: center;
+        }
+        .lightbox img { max-width: 95%; max-height: 95%; border: 2px solid white; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .lightbox-close {
+            position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; font-weight: bold; cursor: pointer; transition: 0.3s;
+        }
+        .lightbox-close:hover { color: var(--vibrant-orange); }
+
+        /* --- ABOUT & CONTACT --- */
+        .content-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); max-width: 800px; margin: 0 auto; border-left: 6px solid var(--vibrant-orange); }
+        .contact-link { color: var(--vibrant-orange); text-decoration: none; font-weight: bold; }
+
+        /* --- MOBILE OPTIMIZATION --- */
+        @media (max-width: 768px) {
+            nav { flex-direction: column; gap: 15px; padding: 1rem; }
+            .nav-links { display: flex; gap: 15px; font-size: 0.9rem; }
+            .nav-links button { margin-left: 0; }
+            
+            .hero { padding: 60px 15px; }
+            .hero h1 { font-size: 2.2rem; }
+            .hero p { font-size: 1.1rem; }
+
+            .container { padding: 10px; }
+            .content-box { padding: 20px; }
+            
+            #map-container { height: 75vh; } /* Taller map on mobile */
+            
+            /* Specific fix for popup scrolling on mobile */
+            .leaflet-popup-content { 
+                width: 85vw !important; /* Not too wide */
+                min-width: 280px;
+                max-height: 70vh !important; /* Cap height to 70% of screen so header/footer are visible */
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+        <span class="lightbox-close">&times;</span>
+        <img id="lightbox-img" src="">
+    </div>
+
+    <nav>
+        <div class="logo">SARAWAK <span>HIKE & SEEK</span></div>
+        <div class="nav-links">
+            <button onclick="showSection('home')" id="btn-home" class="active">HOME</button>
+            <button onclick="showSection('map')" id="btn-map">EXPLORE MAP</button>
+            <button onclick="showSection('about')" id="btn-about">ABOUT US</button>
+        </div>
+    </nav>
+
+    <div class="container">
+
+        <div id="home" class="section active">
+            <div class="hero">
+                <h1>Discover the Hidden Trails</h1>
+                <p>From misty mountains to hidden waterfalls, explore the wild side of Sarawak.</p>
+                <button class="cta-btn" onclick="showSection('map')">Find Your Adventure</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px;">
+                <div class="content-box" style="border-left-color: var(--forest-green);">
+                    <h3>Explore by Category</h3>
+                    <p>Filters help you find the perfect trail, from casual walks to hardcore climbs.</p>
+                </div>
+                <div class="content-box" style="border-left-color: var(--earth-brown);">
+                    <h3>Know Before You Go</h3>
+                    <p>Get details on difficulty, amenities, and hidden waterfalls.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="map" class="section">
+            <h2 style="margin-bottom: 15px;">Exploration Map</h2>
+            <div class="map-legend" id="legend"><span>Loading Categories...</span></div>
+            <div id="map-container"></div>
+        </div>
+
+        <div id="about" class="section">
+            <div class="content-box">
+                <h2>About Sarawak Hike & Seek</h2>
+                <p>Welcome to the ultimate resource for hikers and nature lovers in Sarawak.</p>
+                <br>
+                <p><strong>Our Data:</strong> We compile data on trail conditions, difficulty, and natural features. 
+                Data used in the website is based on avaibale data on the public internet.</p>
+                <br>
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                <h3>Contact Person</h3>
+                <p>For inquiries, collaboration, or trail updates:</p>
+                <p style="margin-top:10px;">
+                    <strong>Nur Hisyam Ramli</strong><br>
+                    <a href="mailto:hisyamhistamine@gmail.com" class="contact-link">hisyamhistamine@gmail.com</a>
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <script>
+        // --- CONFIGURATION ---
+        const RAW_CSV_URL = "https://raw.githubusercontent.com/starchystone/Sarawak-Trek-and-Hike/07debdfd04103beaa99ff6a9e2791bb0537b8678/Database/database.csv";
+        const RAW_VISUALS_BASE = "https://raw.githubusercontent.com/starchystone/Sarawak-Trek-and-Hike/58f3e79fe0b401a3b5d0289f3f9f456204ababf0/Visuals";
+        
+        let map;
+        let mapInitialized = false;
+        let galleryState = {};
+
+        const categoryColors = {
+            "Mountain Trail": "#795548", "Waterfall": "#0288D1", "Jungle Trek": "#2E7D32", 
+            "Park": "#8BC34A", "Cave": "#607D8B", "Hill Trail": "#FF9800", "default": "#555555"
+        };
+
+        function showSection(id) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            document.getElementById('btn-' + id).classList.add('active');
+            if (id === 'map' && !mapInitialized) { initMap(); mapInitialized = true; }
+            else if (id === 'map') { setTimeout(() => map.invalidateSize(), 200); }
+        }
+
+        function initMap() {
+            map = L.map('map-container').setView([2.55, 113.0], 7);
+            L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, attribution: 'Map data: &copy; OSM, SRTM | Map style: &copy; OpenTopoMap' }).addTo(map);
+            loadData();
+        }
+
+        function loadData() {
+            Papa.parse(RAW_CSV_URL, {
+                download: true, header: true,
+                complete: function(results) { processData(results.data); },
+                error: function(err) { console.error("CSV Error:", err); }
+            });
+        }
+
+        function processData(data) {
+            const foundCategories = new Set();
+            const markers = L.layerGroup().addTo(map);
+            const bounds = L.latLngBounds();
+
+            data.forEach(row => {
+                if (!row.Coordinates) return;
+                const parts = row.Coordinates.split(',').map(n => parseFloat(n.trim()));
+                if (parts.length !== 2 || isNaN(parts[0])) return;
+
+                const cat = row.Category ? row.Category.trim() : "default";
+                foundCategories.add(cat);
+                const color = categoryColors[cat] || categoryColors["default"];
+
+                const marker = L.circleMarker(parts, {
+                    radius: 8, fillColor: color, color: "#fff", weight: 2, opacity: 1, fillOpacity: 0.9
+                });
+
+                const safeName = encodeURIComponent(row.Name.trim());
+                const visualFolder = `${RAW_VISUALS_BASE}/${safeName}`;
+                const uniqueId = row.Name.replace(/[^a-zA-Z0-9]/g, '');
+
+                const popupContent = `
+                    <div class="popup-header">
+                        <h3>${row.Name}</h3>
+                        <div>📍 ${row.Location}</div>
+                    </div>
+                    <div class="popup-body">
+                        <div class="popup-grid">
+                            <div class="popup-grid-item"><small>Category</small><strong>${cat}</strong></div>
+                            <div class="popup-grid-item"><small>Difficulty</small><strong>${row.Difficulty || 'N/A'}</strong></div>
+                            <div class="popup-grid-item"><small>Waterfall?</small><strong>${row.Waterfall || 'No'}</strong></div>
+                        </div>
+
+                        <span class="info-label">AMENITIES</span>
+                        <p class="info-text">${row.Amenities || 'None listed'}</p>
+
+                        <span class="info-label">ABOUT THE TRAIL</span>
+                        <p class="info-text">${row.Body || 'No description available in database.'}</p>
+                        
+                        <span class="info-label">TRAIL NOTES (Summary)</span>
+                        <div id="details-${uniqueId}" class="details-txt-box">Loading notes...</div>
+
+                        <span class="info-label">PHOTO GALLERY</span>
+                        <div id="carousel-${uniqueId}" class="carousel-container">
+                            <button class="carousel-btn prev-btn" onclick="prevImage('${uniqueId}')">&#10094;</button>
+                            <img id="img-${uniqueId}" src="" alt="Loading..." style="display:none;" onclick="openLightbox(this.src)" />
+                            <p id="no-img-${uniqueId}" style="color:#888; display:none; font-size:0.8rem;">No images found</p>
+                            <button class="carousel-btn next-btn" onclick="nextImage('${uniqueId}')">&#10095;</button>
+                            <div id="counter-${uniqueId}" class="carousel-counter">0/0</div>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+                marker.on('popupopen', () => { loadExternalMedia(visualFolder, uniqueId); });
+                markers.addLayer(marker);
+                bounds.extend(parts);
+            });
+
+            if (data.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
+            generateLegend(foundCategories);
+        }
+
+        async function loadExternalMedia(folderUrl, id) {
+            // A. Fetch Details.txt
+            fetch(`${folderUrl}/details.txt`)
+                .then(res => res.ok ? res.text() : Promise.reject())
+                .then(text => { const box = document.getElementById(`details-${id}`); if(box) box.innerText = text; })
+                .catch(() => { 
+                    const box = document.getElementById(`details-${id}`); 
+                    if(box) { box.innerText = "No additional notes available."; box.style.background = "#f9f9f9"; }
+                });
+
+            // B. Fetch Images
+            let validImages = [];
+            for (let i = 1; i <= 5; i++) {
+                const imgUrl = `${folderUrl}/${i}.jpg`;
+                try {
+                    const imgRes = await fetch(imgUrl, { method: 'HEAD' });
+                    if (imgRes.ok) validImages.push(imgUrl);
+                } catch(e) { }
+            }
+            galleryState[id] = { images: validImages, index: 0 };
+            updateCarousel(id);
+        }
+
+        // --- CAROUSEL LOGIC ---
+        function updateCarousel(id) {
+            const state = galleryState[id];
+            const imgEl = document.getElementById(`img-${id}`);
+            const noImgEl = document.getElementById(`no-img-${id}`);
+            const counterEl = document.getElementById(`counter-${id}`);
+
+            if (!imgEl) return;
+            if (state.images.length === 0) {
+                imgEl.style.display = 'none'; noImgEl.style.display = 'block'; counterEl.style.display = 'none';
+                return;
+            }
+            noImgEl.style.display = 'none'; imgEl.style.display = 'block'; counterEl.style.display = 'block';
+            imgEl.src = state.images[state.index];
+            counterEl.innerText = `${state.index + 1} / ${state.images.length}`;
+        }
+
+        window.nextImage = function(id) {
+            const state = galleryState[id];
+            if (!state || state.images.length === 0) return;
+            state.index = (state.index + 1) % state.images.length;
+            updateCarousel(id);
+        };
+        window.prevImage = function(id) {
+            const state = galleryState[id];
+            if (!state || state.images.length === 0) return;
+            state.index = (state.index - 1 + state.images.length) % state.images.length;
+            updateCarousel(id);
+        };
+
+        // --- LIGHTBOX FUNCTIONS ---
+        window.openLightbox = function(src) {
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImg = document.getElementById('lightbox-img');
+            lightbox.style.display = 'flex';
+            lightboxImg.src = src;
+        };
+
+        window.closeLightbox = function() {
+            document.getElementById('lightbox').style.display = 'none';
+        };
+
+        function generateLegend(categories) {
+            const legendContainer = document.getElementById('legend');
+            legendContainer.innerHTML = ''; 
+            categories.forEach(cat => {
+                const color = categoryColors[cat] || categoryColors["default"];
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `<span class="dot" style="background-color: ${color};"></span> ${cat}`;
+                legendContainer.appendChild(item);
+            });
+        }
+    </script>
+</body>
+</html>
+
