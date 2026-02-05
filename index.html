@@ -787,10 +787,30 @@
         }
 
         async function loadUserScore() {
-             // Placeholder: Fetch single user score
-             // In real app, fetch from 'profiles' table where id = currentUser.id
-             document.getElementById('user-score').innerText = "0"; 
-        }
+                    if (!currentUser) return;
+
+                    try {
+                        // Fetch the specific row for the currently logged-in user
+                        const { data, error } = await supabaseClient
+                            .from('profiles')
+                            .select('score')
+                            .eq('id', currentUser.id)
+                            .single();
+
+                        if (error) throw error;
+
+                        // Update the HTML text with the real number
+                        // If data.score is null (new user), show 0
+                        const currentScore = data.score || 0;
+                        document.getElementById('user-score').innerText = currentScore;
+                        
+                        // Optional: Animate the number for a cool effect
+                        // animateValue("user-score", 0, currentScore, 1000);
+
+                    } catch (err) {
+                        console.error("Error fetching score:", err);
+                    }
+                }
     </script>
 </body>
 </html>
