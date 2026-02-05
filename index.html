@@ -720,15 +720,35 @@
             }
         }
 
-        function onScanSuccess(decodedText, decodedResult) {
-            // STOP SCANNING ONCE FOUND
-            stopScanner();
-            
-            // TODO: LOGIC TO VERIFY QR CODE GOES HERE
-            alert(`You found a QR Code!\nContent: ${decodedText}\n\n(Backend logic needed to add points)`);
-            
-            // Example: playSound();
-        }
+        async function onScanSuccess(decodedText, decodedResult) {
+                    // 1. Pause the scanner so it doesn't scan 100 times in a second
+                    if (html5QrcodeScanner) html5QrcodeScanner.pause();
+
+                    try {
+                        // 2. Send the code to Supabase for verification
+                        const { data, error } = await supabaseClient.rpc('submit_scan', { 
+                            code_text: decodedText 
+                        });
+
+                        if (error) throw error;
+
+                        // 3. Handle the result
+                        if (data.success) {
+                            alert("🎉 " + data.message);
+                            loadUserScore();   // Refresh the score display
+                            loadLeaderboard(); // Refresh the leaderboard
+                        } else {
+                            alert("❌ " + data.message);
+                        }
+
+                    } catch (err) {
+                        console.error("Scan Error:", err);
+                        alert("Error processing scan. Check your internet.");
+                    }
+
+                    // 4. Resume scanning (or stop if you prefer)
+                    if (html5QrcodeScanner) html5QrcodeScanner.resume();
+                }
 
         // 4. DATABASE FUNCTIONS (LEADERBOARD)
         async function loadLeaderboard() {
