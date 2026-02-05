@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sarawak Hike & Seek</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600&family=Raleway:wght@400;600&display=swap" rel="stylesheet">
 
     <style>
@@ -188,6 +190,7 @@
         <div class="nav-links">
             <button onclick="showSection('home')" id="btn-home" class="active">HOME</button>
             <button onclick="showSection('map')" id="btn-map">EXPLORE MAP</button>
+            <button onclick="showSection('seek')" id="btn-seek">SEEKER</button>
             <button onclick="showSection('about')" id="btn-about">ABOUT US</button>
         </div>
     </nav>
@@ -217,6 +220,66 @@
             <h2 style="margin-bottom: 15px;">Exploration Map</h2>
             <div class="map-legend" id="legend"><span>Loading Categories...</span></div>
             <div id="map-container"></div>
+        </div>
+
+        <div id="seek" class="section">
+            
+            <div id="auth-view" class="content-box" style="text-align: center; display:none;">
+                <h2>Join the Hunt 🕵️‍♂️</h2>
+                <p>Sign in to track your hikes, collect points, and climb the Sarawak leaderboard.</p>
+                <div style="margin: 30px 0;">
+                    <input type="email" id="email-input" placeholder="Enter your email" style="padding: 10px; width: 60%; max-width: 300px; border: 1px solid #ccc; border-radius: 4px;">
+                    <br><br>
+                    <button class="cta-btn" onclick="handleLogin()">Get Magic Link</button>
+                </div>
+                <p style="font-size: 0.8rem; color: #666;">We use passwordless login. We'll send a secure link to your email.</p>
+            </div>
+
+            <div id="game-view" style="display:none;">
+                <div class="content-box" style="margin-bottom: 20px; border-left-color: #e91e63;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <h3 style="color: #e91e63;">Explorer Dashboard</h3>
+                            <p>Signed in as: <strong id="user-email">...</strong></p>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-size: 0.9rem;">YOUR SCORE</span>
+                            <div style="font-size: 2.5rem; font-weight: bold; color: #e91e63;" id="user-score">0</div>
+                        </div>
+                    </div>
+                    
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+                    
+                    <button class="cta-btn" onclick="toggleScanner()" style="background-color: #263238; width: 100%;">
+                        📸 SCAN QR CODE
+                    </button>
+                    
+                    <div id="scanner-container" style="display:none; margin-top: 15px; text-align: center;">
+                        <div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto;"></div>
+                        <button onclick="stopScanner()" style="margin-top:10px; padding:5px 15px; background:#ccc; border:none; cursor:pointer;">Close Camera</button>
+                    </div>
+                </div>
+
+                <div class="content-box">
+                    <h3>🏆 Top Seekers</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                        <thead style="background: #f4f7f6; text-align: left;">
+                            <tr>
+                                <th style="padding: 10px; border-bottom: 2px solid #ddd;">Rank</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #ddd;">Explorer</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Points</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-body">
+                            <tr><td colspan="3" style="padding:20px; text-align:center;">Loading leaderboard...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="handleLogout()" style="background:none; border:none; text-decoration:underline; cursor:pointer; color: #666;">Sign Out</button>
+                </div>
+            </div>
         </div>
 
         <div id="about" class="section">
@@ -565,6 +628,148 @@
                     maximumAge: 0
                 }
             );
+        }// --- SEEK / GAME VARIABLES ---
+        let html5QrcodeScanner = null;
+        let currentUser = null;
+
+        // 1. INITIALIZATION: Check if user is logged in
+        async function initAuth() {
+            // Check current session
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            updateUI(session);
+
+            // Listen for auth changes (login/logout events)
+            supabaseClient.auth.onAuthStateChange((_event, session) => {
+                updateUI(session);
+            });
+        }
+        
+        // Call this when the page loads!
+        initAuth();
+
+        function updateUI(session) {
+            const authView = document.getElementById('auth-view');
+            const gameView = document.getElementById('game-view');
+            
+            if (session) {
+                // User is logged in
+                currentUser = session.user;
+                authView.style.display = 'none';
+                gameView.style.display = 'block';
+                document.getElementById('user-email').innerText = currentUser.email.split('@')[0]; // Show username part of email
+                loadLeaderboard();
+                loadUserScore();
+            } else {
+                // User is logged out
+                currentUser = null;
+                authView.style.display = 'block';
+                gameView.style.display = 'none';
+            }
+        }
+
+        // 2. AUTHENTICATION FUNCTIONS
+        async function handleLogin() {
+            const email = document.getElementById('email-input').value;
+            if (!email) return alert("Please enter an email address.");
+
+            const { error } = await supabaseClient.auth.signInWithOtp({ email: email });
+            
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                alert("Check your email for the magic login link!");
+            }
+        }
+
+        async function handleLogout() {
+            await supabaseClient.auth.signOut();
+            alert("Signed out successfully.");
+        }
+
+        // 3. SCANNER FUNCTIONS
+        function toggleScanner() {
+            const container = document.getElementById('scanner-container');
+            if (container.style.display === 'block') {
+                stopScanner();
+            } else {
+                container.style.display = 'block';
+                startScanner();
+            }
+        }
+
+        function startScanner() {
+            if (html5QrcodeScanner) return; // Already running
+
+            html5QrcodeScanner = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            
+            html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
+            .catch(err => {
+                console.error("Camera start failed", err);
+                alert("Could not start camera. Please allow permissions.");
+            });
+        }
+
+        function stopScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.stop().then(() => {
+                    html5QrcodeScanner.clear();
+                    html5QrcodeScanner = null;
+                    document.getElementById('scanner-container').style.display = 'none';
+                }).catch(err => console.error("Failed to stop scanner", err));
+            }
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            // STOP SCANNING ONCE FOUND
+            stopScanner();
+            
+            // TODO: LOGIC TO VERIFY QR CODE GOES HERE
+            alert(`You found a QR Code!\nContent: ${decodedText}\n\n(Backend logic needed to add points)`);
+            
+            // Example: playSound();
+        }
+
+        // 4. DATABASE FUNCTIONS (LEADERBOARD)
+        async function loadLeaderboard() {
+            // NOTE: You need a table named 'profiles' with columns: username, score
+            try {
+                const { data, error } = await supabaseClient
+                    .from('profiles')
+                    .select('username, score')
+                    .order('score', { ascending: false })
+                    .limit(10);
+
+                if (error) throw error;
+
+                const tbody = document.getElementById('leaderboard-body');
+                tbody.innerHTML = '';
+                
+                data.forEach((user, index) => {
+                    // Highlight current user row
+                    const isMe = currentUser.email.includes(user.username) ? "background:#fffbe6;" : "";
+                    const rankEmoji = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : (index + 1);
+                    
+                    const row = `
+                        <tr style="border-bottom: 1px solid #eee; ${isMe}">
+                            <td style="padding: 10px;">${rankEmoji}</td>
+                            <td style="padding: 10px;">${user.username || "Anonymous"}</td>
+                            <td style="padding: 10px; text-align: right; font-weight:bold;">${user.score}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+
+            } catch (err) {
+                console.error("Leaderboard error:", err);
+                document.getElementById('leaderboard-body').innerHTML = `<tr><td colspan="3">Leaderboard not setup yet.</td></tr>`;
+            }
+        }
+
+        async function loadUserScore() {
+             // Placeholder: Fetch single user score
+             // In real app, fetch from 'profiles' table where id = currentUser.id
+             document.getElementById('user-score').innerText = "0"; 
         }
     </script>
 </body>
