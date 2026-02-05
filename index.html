@@ -752,39 +752,47 @@
 
         // 4. DATABASE FUNCTIONS (LEADERBOARD)
         async function loadLeaderboard() {
-            // NOTE: You need a table named 'profiles' with columns: username, score
-            try {
-                const { data, error } = await supabaseClient
-                    .from('profiles')
-                    .select('email, score')
-                    .order('score', { ascending: false })
-                    .limit(10);
+                    try {
+                        // 1. CHANGED: Fetch 'email' instead of 'username'
+                        const { data, error } = await supabaseClient
+                            .from('profiles')
+                            .select('email, score')
+                            .order('score', { ascending: false })
+                            .limit(10);
 
-                if (error) throw error;
+                        if (error) throw error;
 
-                const tbody = document.getElementById('leaderboard-body');
-                tbody.innerHTML = '';
-                
-                data.forEach((user, index) => {
-                    // Highlight current user row
-                    const isMe = currentUser.email.includes(user.username) ? "background:#fffbe6;" : "";
-                    const rankEmoji = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : (index + 1);
-                    
-                    const row = `
-                        <tr style="border-bottom: 1px solid #eee; ${isMe}">
-                            <td style="padding: 10px;">${rankEmoji}</td>
-                            <td style="padding: 10px;">${user.username || "Anonymous"}</td>
-                            <td style="padding: 10px; text-align: right; font-weight:bold;">${user.score}</td>
-                        </tr>
-                    `;
-                    tbody.innerHTML += row;
-                });
+                        const tbody = document.getElementById('leaderboard-body');
+                        tbody.innerHTML = '';
+                        
+                        data.forEach((user, index) => {
+                            // 2. LOGIC: Create a "Display Name" from the email
+                            // "hisyamhistamine@gmail.com" -> "hisyamhistamine"
+                            let displayName = "Anonymous";
+                            if (user.email) {
+                                displayName = user.email.split('@')[0];
+                            }
 
-            } catch (err) {
-                console.error("Leaderboard error:", err);
-                document.getElementById('leaderboard-body').innerHTML = `<tr><td colspan="3">Leaderboard not setup yet.</td></tr>`;
-            }
-        }
+                            // Highlight current user row
+                            const isMe = (currentUser && currentUser.email === user.email) ? "background:#fffbe6;" : "";
+                            const rankEmoji = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : (index + 1);
+                            
+                            const row = `
+                                <tr style="border-bottom: 1px solid #eee; ${isMe}">
+                                    <td style="padding: 10px;">${rankEmoji}</td>
+                                    <td style="padding: 10px;">${displayName}</td>
+                                    <td style="padding: 10px; text-align: right; font-weight:bold;">${user.score}</td>
+                                </tr>
+                            `;
+                            tbody.innerHTML += row;
+                        });
+
+                    } catch (err) {
+                        console.error("Leaderboard error:", err);
+                        // If this still fails, check your RLS policies!
+                        document.getElementById('leaderboard-body').innerHTML = `<tr><td colspan="3" style="color:red;">Error loading data. Check console.</td></tr>`;
+                    }
+                }
 
         async function loadUserScore() {
                     if (!currentUser) return;
