@@ -756,7 +756,7 @@
             try {
                 const { data, error } = await supabaseClient
                     .from('profiles')
-                    .select('username, score')
+                    .select('email, score')
                     .order('score', { ascending: false })
                     .limit(10);
 
